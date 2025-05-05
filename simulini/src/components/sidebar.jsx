@@ -1,8 +1,8 @@
 import React from "react";
 
-export default function sideBar() {
+export default function SideBar() {
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+    <header className="w-full flex items-center justify-between px-6 py-4 border-b border-gray-700">
       <div className="flex justify-center items-center space-x-8 hover:pointer">
         <img
           src={require("../assets/logo.png")}

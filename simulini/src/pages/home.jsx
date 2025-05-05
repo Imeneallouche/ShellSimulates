@@ -1,6 +1,8 @@
 import React from "react";
 import { useState, useEffect } from "react";
 import Topology3D from "../components/topology";
+import SideBar from "../components/sidebar";
+import axios from "axios";
 
 export default function UrrlcTopologySimulatorUI() {
   const [nbUPF, setNbUPF] = useState(1);
@@ -9,6 +11,30 @@ export default function UrrlcTopologySimulatorUI() {
 
   const [distances, setDistances] = useState([[""]]);
   const [links, setLinks] = useState([[false]]);
+
+  const [result, setResult] = useState(null);
+
+  // Called when the user clicks “Submit”
+  const handleSubmit = async () => {
+    try {
+      const payload = {
+        nbUPF,
+        nbgNB,
+        nbUE,
+        distances,
+        links,
+      };
+
+      const resp = await axios.post(
+        "http://localhost:5000/api/topology",
+        payload
+      );
+      // Expecting { average_latency: <number>, average_reliability: <number> }
+      setResult(resp.data);
+    } catch (err) {
+      console.error("Submit failed", err);
+    }
+  };
 
   // adjust matrices when dimensions change
   useEffect(() => {
@@ -50,39 +76,7 @@ export default function UrrlcTopologySimulatorUI() {
   return (
     <div className="h-screen w-full bg-gray-900 text-white flex flex-col">
       {/* Top Stats Bar */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-        <div className="flex justify-center items-center space-x-8 hover:pointer">
-          <img
-            src={require("../assets/logo.png")}
-            className="h-16 cursor-pointer"
-            alt="logo"
-          />
-          <div className="hover:pointer">
-            {" "}
-            <p>Shell</p>
-            <p>Simulates</p>
-          </div>
-        </div>
-
-        <div className="flex space-x-32">
-          {["Home", "About us", "Simulate", "Documentation", "Contact Us"].map(
-            (value, idx) => (
-              <div key={idx} className="flex flex-col items-center">
-                <span className="text-l font-semibold text-gray-400 hover:cursor-pointer hover:text-white">
-                  {value}
-                </span>
-              </div>
-            )
-          )}
-        </div>
-        <div className="text-right text-sm text-gray-400">
-          <div>
-            Time
-            <br />
-            <span className="font-medium text-white">13:44:31 2021.07.14</span>
-          </div>
-        </div>
-      </header>
+      <SideBar />
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
         <aside className="w-96 bg-gray-800 p-4 space-y-6 overflow-y-auto">
@@ -208,14 +202,17 @@ export default function UrrlcTopologySimulatorUI() {
               </tbody>
             </table>
           </div>
+
+          <button
+            className="w-80 py-8 bg-gray-700 rounded mt-3 flex items-center justify-center text-gray-500 hover:bg-blue-600 hover:text-white"
+            onClick={handleSubmit}
+          >
+            Submit
+          </button>
         </aside>
 
         {/* Main 3D Map Area */}
         <main className="flex-1 relative bg-gray-800">
-          <div
-            className="absolute inset-0 bg-center bg-cover opacity-60"
-            style={{ backgroundImage: "url('/path/to/3d-map-render.png')" }}
-          />
           <div className="absolute inset-0 flex items-center justify-center">
             <Topology3D
               nbUPF={nbUPF}
@@ -226,6 +223,39 @@ export default function UrrlcTopologySimulatorUI() {
             />
           </div>
         </main>
+
+        {/* Right Sidebar */}
+        <aside className="w-80 bg-gray-800 p-4 space-y-6 overflow-y-auto">
+          {/* Card: VITAE AT SCELERISQUE */}
+          <div className="bg-gray-700 p-4 rounded border border-blue-600">
+            <h3 className="text-sm font-semibold">Latency (ms)</h3>
+            <p className="text-xs text-gray-400">
+              the best, worst and average one
+            </p>
+            <div className="mt-2">
+              <div className="flex space-x-4 text-sm">
+                <div>
+                  <div className="text-2xl font-semibold">
+                    {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
+                  </div>
+                  <div className="text-gray-400 uppercase">best</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold">
+                    {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
+                  </div>
+                  <div className="text-gray-400 uppercase">worst</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold text-blue-400">
+                    {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
+                  </div>
+                  <div className="text-gray-400 uppercase">average</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );

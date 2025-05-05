@@ -1,0 +1,18 @@
+version: "3.8"
+services:
+  # Core 5GC functions from upstream
+  {% include "free5gc-compose-base-services.j2" %}
+
+  # Dynamically add UPF instances
+  {% for i in range(nbUPF) %}
+  upf_{{ i+1 }}:
+    image: free5gc/upf:v4.0.1
+    container_name: upf{{ i+1 }}
+    command: bash -c "./upf-iptables.sh && ./upf -c /free5gc/config/upfcfg{{ i+1 }}.yaml"
+    volumes:
+      - ./config/upfcfg{{ i+1 }}.yaml:/free5gc/config/upfcfg{{ i+1 }}.yaml
+      - /dev/net/tun:/dev/net/tun
+    networks:
+      free5gc_net:
+        ipv4_address: "{{ upf_ips[i] }}"
+  {% endfor %}
