@@ -1,6 +1,15 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 export default function SideBar() {
+  const Menus = [
+    { title: "Home", Path: "/" },
+    { title: "About Us", Path: "/AboutUs" },
+    { title: "Simulate", Path: "/Simulate" },
+    { title: "Documentation", Path: "/Documentation" },
+    { title: "Contact Us", Path: "/ContactUs" },
+  ];
+
   return (
     <header className="w-full flex items-center justify-between px-6 py-4 border-b border-gray-700">
       <div className="flex justify-center items-center space-x-8 hover:pointer">
@@ -20,9 +29,12 @@ export default function SideBar() {
         {["Home", "About us", "Simulate", "Documentation", "Contact Us"].map(
           (value, idx) => (
             <div key={idx} className="flex flex-col items-center">
-              <span className="text-l font-semibold text-gray-400 hover:cursor-pointer hover:text-white">
+              <Link
+                to={Menus[idx].Path}
+                className="text-l font-semibold text-gray-400 hover:cursor-pointer hover:text-white"
+              >
                 {value}
-              </span>
+              </Link>
             </div>
           )
         )}
