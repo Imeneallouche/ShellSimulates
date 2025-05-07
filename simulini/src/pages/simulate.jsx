@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Topology3D from "../components/topology";
 import SideBar from "../components/sidebar";
 import axios from "axios";
+import { useLocation } from "react-router-dom";
 
 export default function Simulate() {
   const [nbUPF, setNbUPF] = useState(1);
@@ -54,6 +55,46 @@ export default function Simulate() {
       return newLinks;
     });
   }, [nbUPF, nbgNB]);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.preset) {
+      const preset = location.state.preset;
+      if (preset === "simple") {
+        setNbUPF(1);
+        setNbgNB(1);
+        setNbUE(3);
+        setDistances([["10"]]); // gNB0 → UPF0
+        setLinks([[false]]);
+      } else if (preset === "medium") {
+        setNbUPF(2);
+        setNbgNB(2);
+        setNbUE(5);
+        setDistances([
+          ["10", ""],   // gNB0 → UPF0
+          ["5", "5"],   // gNB1 → UPF0 & UPF1
+        ]);
+        setLinks([
+          [false, false],
+          [false, false],
+        ]);
+      } else if (preset === "complex") {
+        setNbUPF(3);
+        setNbgNB(3);
+        setNbUE(7);
+        setDistances([
+          ["10", "5", ""],     // gNB0 → UPF0 & UPF1
+          ["10", "10", "10"],  // gNB1 → all UPFs
+          ["", "5", "10"],     // gNB2 → UPF1 & UPF2
+        ]);
+        setLinks([
+          [false, true, false],
+          [true, false, true],
+          [false, true, false],
+        ]);
+      }
+    }
+  }, [location.state]);
 
   // handle distance cell change
   const handleDistanceChange = (i, j, value) => {
@@ -74,19 +115,20 @@ export default function Simulate() {
   };
 
   return (
-    <div className="h-screen w-full bg-gray-900 text-white flex flex-col">
+    <div className="h-screen w-full bg-white text-black
+     flex flex-col">
       {/* Top Stats Bar */}
       <SideBar />
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
-        <aside className="w-96 bg-gray-800 p-4 space-y-6 overflow-y-auto">
+        <aside className="w-96 bg-white border-2 border-blue-500 p-4 space-y-6 overflow-y-auto">
           {/* UE input */}
-          <div className="bg-gray-700 p-4 rounded border border-blue-600">
+          <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
             <h3 className="text-sm font-semibold uppercase">Number of UEs</h3>
 
             <input
               type="number"
-              className="w-full bg-gray-600 text-sm text-white p-1 rounded"
+              className="w-full bg-blue-300 text-sm text-white px-3 py-1 rounded"
               value={nbUE}
               onChange={(e) =>
                 setNbUE(Math.max(1, Math.min(100, +e.target.value)))
@@ -95,10 +137,10 @@ export default function Simulate() {
           </div>
 
           {/* UPF input */}
-          <div className="bg-gray-700 p-4 rounded border border-blue-600">
+          <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
             <h3 className="text-sm font-semibold uppercase">Number of UPFs</h3>
             <input
-              className="w-full bg-gray-600 text-sm text-white p-1 rounded"
+              className="w-full bg-blue-300 text-sm text-white px-3 py-1 rounded"
               type="number"
               min="1"
               max="10"
@@ -110,10 +152,10 @@ export default function Simulate() {
           </div>
 
           {/* gNB input */}
-          <div className="bg-gray-700 p-4 rounded border border-blue-600">
+          <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
             <h3 className="text-sm font-semibold uppercase">Number of gNBs</h3>
             <input
-              className="w-full bg-gray-600 text-sm text-white p-1 rounded"
+              className="w-full bg-blue-300 text-sm text-white px-3 py-1 rounded"
               type="number"
               min="1"
               max="10"
@@ -125,11 +167,11 @@ export default function Simulate() {
           </div>
 
           {/* Distance matrix */}
-          <div className="bg-gray-700 p-4 rounded border border-blue-600">
+          <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
             <h3 className="text-sm font-semibold uppercase">
               Distance between UPFs and gNBs
             </h3>
-            <p className="text-xs text-gray-400">between each UPF and gNB</p>
+            <p className="text-xs text-blue-500">between each UPF and gNB</p>
             <table className="w-full mt-3 text-xs table-fixed">
               <thead>
                 <tr>
@@ -143,13 +185,13 @@ export default function Simulate() {
               </thead>
               <tbody>
                 {Array.from({ length: nbgNB }, (_, gnbIdx) => (
-                  <tr key={gnbIdx} className={gnbIdx % 2 ? "bg-gray-800" : ""}>
+                  <tr key={gnbIdx} className={gnbIdx % 2 ? "" : ""}>
                     <td className="px-1 py-0.5 text-left">{gnbIdx + 1}</td>
                     {Array.from({ length: nbUPF }, (_, upfIdx) => (
                       <td key={upfIdx} className="px-1 py-0.5">
                         <input
                           type="text"
-                          className="w-full bg-gray-600 text-sm text-white p-1 rounded"
+                          className="w-full bg-blue-300 text-sm text-white px-4 py-1 rounded"
                           value={distances[gnbIdx]?.[upfIdx] ?? ""}
                           onChange={(e) =>
                             handleDistanceChange(gnbIdx, upfIdx, e.target.value)
@@ -164,11 +206,11 @@ export default function Simulate() {
           </div>
 
           {/* Linking UPFs matrix */}
-          <div className="bg-gray-700 p-4 rounded border border-green-600">
+          <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
             <h3 className="text-sm font-semibold uppercase">
               Linking UPFs Matrix
             </h3>
-            <p className="text-xs text-gray-400">check to link UPF pairs</p>
+            <p className="text-xs text-blue-500">check to link UPF pairs</p>
             <table className="w-full mt-3 text-xs table-fixed">
               <thead>
                 <tr>
@@ -182,27 +224,30 @@ export default function Simulate() {
               </thead>
               <tbody>
                 {Array.from({ length: nbUPF }, (_, rowIdx) => (
-                  <tr key={rowIdx} className={rowIdx % 2 ? "bg-gray-800" : ""}>
+                  <tr key={rowIdx}>
                     <td className="px-1 py-0.5 text-left">{rowIdx + 1}</td>
                     {Array.from({ length: nbUPF }, (_, colIdx) => (
                       <td key={colIdx} className="px-1 py-0.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={links[rowIdx]?.[colIdx] || false}
-                          onChange={(e) =>
-                            handleLinkChange(rowIdx, colIdx, e.target.checked)
-                          }
-                        />
+                        {colIdx > rowIdx ? (
+                          <input
+                            type="checkbox"
+                            checked={links[rowIdx]?.[colIdx] || false}
+                            onChange={(e) =>
+                              handleLinkChange(rowIdx, colIdx, e.target.checked)
+                            }
+                          />
+                        ) : null}
                       </td>
                     ))}
                   </tr>
                 ))}
               </tbody>
+
             </table>
           </div>
 
           <button
-            className="w-full py-8 bg-gray-700 rounded mt-3 flex items-center justify-center text-gray-500 hover:bg-blue-600 hover:text-white"
+            className="w-full py-4 bg-blue-500 rounded mt-3 flex items-center justify-center text-white border-2 border-blue-500 hover:bg-white hover:text-black"
             onClick={handleSubmit}
           >
             Submit
@@ -210,7 +255,7 @@ export default function Simulate() {
         </aside>
 
         {/* Main 3D Map Area */}
-        <main className="flex-1 relative bg-gray-800">
+        <main className="flex-1 relative bg-gray-100">
           <div className="absolute inset-0 flex items-center justify-center">
             <Topology3D
               nbUPF={nbUPF}
@@ -223,49 +268,49 @@ export default function Simulate() {
         </main>
 
         {/* Right Sidebar */}
-        <aside className="w-80 bg-gray-800 p-4 space-y-6 overflow-y-auto">
-          <div className="bg-gray-700 p-4 rounded border border-blue-600">
-            <h3 className="text-sm font-semibold">Latency (ms)</h3>
-            <p className="text-xs text-gray-400">
+        <aside className="w-80 bg-white p-4 space-y-6 overflow-y-auto">
+          <div className="bg-gray-100 h-1/3 p-4 rounded border-2 border-blue-600">
+            <h3 className="text-sm mt-2 font-semibold">Latency (ms)</h3>
+            <p className="text-xs mt-2 text-blue-500">
               the best, worst and average one
             </p>
-            <div className="mt-2">
+            <div className="mt-8 p-2">
               <div className="flex space-x-4 text-sm">
                 <div>
                   <div className="text-2xl font-semibold">
                     {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
                   </div>
-                  <div className="text-gray-400 uppercase">best</div>
+                  <div className="text-blue-500 uppercase mt-2">best</div>
                 </div>
                 <div>
                   <div className="text-2xl font-semibold">
                     {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
                   </div>
-                  <div className="text-gray-400 uppercase">worst</div>
+                  <div className="text-blue-500 uppercase mt-2">worst</div>
                 </div>
                 <div>
                   <div className="text-2xl font-semibold text-blue-400">
                     {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
                   </div>
-                  <div className="text-gray-400 uppercase">average</div>
+                  <div className="text-blue-500 uppercase mt-2">average</div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-gray-700 p-4 rounded border border-blue-600">
-            <h3 className="text-sm font-semibold">Reliability (%)</h3>
-            <p className="text-xs text-gray-400">
+          <div className="bg-gray-100 p-4 mt-4 rounded h-1/3 border-2 border-blue-600">
+            <h3 className="text-sm mt-2 font-semibold">Reliability (%)</h3>
+            <p className="text-xs mt-2 text-blue-500">
               the best, worst and average one
             </p>
             <div className="flex space-x-3 mt-4">
               {["best", "worst", "average"].map((label, i) => (
                 <div key={i} className="flex flex-col items-center">
-                  <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center text-gray-500">
+                  <div className="h-16 w-16 bg-blue-500 mt-2 rounded-full flex items-center justify-center text-white">
                     per
                   </div>
-                  <div className="text-xs mt-1">70%</div>
-                  <div className="text-[10px] text-gray-400">{label}</div>
+                  <div className="text-xs mt-2">70%</div>
+                  <div className="text-[10px] text-blue-500">{label}</div>
                 </div>
               ))}
             </div>
