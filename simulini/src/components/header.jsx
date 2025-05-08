@@ -20,15 +20,15 @@ export default function Header() {
             </h1>
           </div>
           <h2>
-            Your one and only innovative combined emulator and simulator of
-            URLLC 5G topologies
+            Your all-in-one innovative emulator and simulator for URLLC 5G
+            topologies
           </h2>
           <br />
           <h2>
-            You can not only make the topologies you want come in to a reality
-            using the integrated free5gc-compose emulator but only simulate the
-            latency and reliability of the topology based on the UPFs, gNBs and
-            UEs placement in the topoogy
+            Not only can you bring your desired topologies to life using the
+            integrated free5GC-compose emulator, but you can also simulate the
+            latency and reliability of your network based on the placement of
+            UPFs, gNBs, and UEs in the topology.
           </h2>
 
           <div className="mt-12 flex space-x-4">

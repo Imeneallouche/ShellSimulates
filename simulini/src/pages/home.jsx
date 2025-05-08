@@ -33,10 +33,11 @@ export default function Home() {
           {categories.map((cat) => (
             <button
               key={cat}
-              className={`px-6 py-2 rounded-full text-sm font-medium transition ${active === cat
+              className={`px-6 py-2 rounded-full text-sm font-medium transition ${
+                active === cat
                   ? "bg-blue-500 text-white"
                   : "border-2 border-blue-600 text-black"
-                }`}
+              }`}
               onClick={() => setActive(cat)}
             >
               {cat}
@@ -48,13 +49,13 @@ export default function Home() {
           {filtered.map((proj) => (
             <div
               key={proj.id}
-              className="bg-white hover:text-white text-black rounded-lg items-center text-center hover:scale-105 overflow-hidden hover:bg-blue-500 transition cursor-pointer"
+              className="bg-white hover:text-white text-black rounded-lg items-center text-center hover:scale-105 hover:bg-blue-500 transition cursor-pointer"
               onClick={() => handleTopologyClick(proj.category)}
             >
               <img
                 src={require(`../assets/${proj.img}`)}
                 alt={`Project ${proj.id}`}
-                className="w-full object-cover"
+                className="w-full h-96 object-cover"
               />
               <h2 className="p-4 text-lg font-semibold">{proj.category}</h2>
             </div>

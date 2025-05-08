@@ -308,9 +308,10 @@ export default function Simulate() {
               {["best", "worst", "average"].map((label, i) => (
                 <div key={i} className="flex flex-col items-center">
                   <div className="h-16 w-16 bg-blue-500 mt-2 rounded-full flex items-center justify-center text-white">
-                    per
+                    {result
+                      ? (result.average_reliability * 1e3).toFixed(2)
+                      : "-"}
                   </div>
-                  <div className="text-xs mt-2">70%</div>
                   <div className="text-[10px] text-blue-500">{label}</div>
                 </div>
               ))}

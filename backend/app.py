@@ -11,73 +11,96 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for React
 
 # Constants for latency/reliability
-C_PROP = 2e8  # propagation speed in fiber (m/s)
-TP_UE = 10  # packet generation rate per UE (packets/s), adjust as needed
-MU_GNB = 1000  # gNB service rate (packets/s), adjust per configuration
-PROCESS_GNB = 0.001  # fixed processing time at gNB (s)
-L_BITS = 32 * 8  # 32-byte packets → 256 bits
+import math
+from typing import List, Dict
 
 
-def qfunc(x):
-    return 0.5 * (1 - erf(x / sqrt(2)))
+def calculate_metrics(num_upfs, num_gnbs, ue_per_gnb, distances, links):
+    # Constants
+    SPEED = 2e8  # m/s (fiber optic)
+    BLER = 0.1
+    N_RETRANS = 3
+    T_INITIAL = 0.001  # 1 ms
+    T_RETRANS = 0.001  # 1 ms per retransmission
+    PROCESSING_DELAY_PER_UPF = 0.0005  # 0.5 ms
 
+    # Radio latency (round trip)
+    radio_latency = 2 * (T_INITIAL + N_RETRANS * T_RETRANS)
 
-def compute_metrics(distances, nbUE):
-    """
-    distances: list of lists [[d_j0, d_j1, ...], ...] with empty strings for no link.
-    nbUE: number of UEs per gNB (or list per gNB)
+    # Radio reliability (round trip)
+    radio_reliability_one_way = 1 - (BLER ** (N_RETRANS + 1))
+    radio_reliability_round_trip = radio_reliability_one_way**2
 
-    Returns dict with best/worst/avg latency & reliability.
-    """
-    latencies = []
+    # Initialize metrics
+    latency_worst, latency_best, latency_avg = [], [], []
     reliabilities = []
+    total_ues = sum(ue_per_gnb)
 
-    # transport-network propagation + gNB queueing
-    for j, row in enumerate(distances):
-        # determine UE load on this gNB
-        ue_count = nbUE[j] if isinstance(nbUE, list) else nbUE
-        # arrival rate lambda_gnb
-        lam = ue_count * TP_UE
-        # service margin
-        mu_minus_lambda = MU_GNB - lam
-        for d_str in row:
-            try:
-                d = float(d_str)
-            except (ValueError, TypeError):
-                continue
-            # 1) transport prop delay
-            t_prop = d / C_PROP
-            # 2) queueing delay at gNB (M/M/1)
-            t_queue = PROCESS_GNB + (
-                1.0 / mu_minus_lambda if mu_minus_lambda > 0 else float("inf")
-            )
-            total_lat = t_prop + t_queue
-            latencies.append(total_lat)
+    for gnb_id in range(num_gnbs):
+        num_ues = ue_per_gnb[gnb_id]
+        if num_ues == 0:
+            continue
 
-            # reliability: BPSK AWGN on fiber link
-            snr = 1.0 / (d**2 + 1e-9)
-            ber = qfunc(sqrt(2 * snr))
-            # consider queue drop negligible; reliability = (1-BER)^L
-            rel = (1 - ber) ** L_BITS
-            reliabilities.append(rel)
+        # Extract connected UPFs and distances for this gNB
+        connected_upfs = [
+            upf_id
+            for upf_id in range(num_upfs)
+            if distances[gnb_id][upf_id] is not None
+        ]
+        if not connected_upfs:
+            # No UPF connected: latency = infinity, reliability = 0
+            latency_worst.extend([float("inf")] * num_ues)
+            latency_best.extend([float("inf")] * num_ues)
+            latency_avg.extend([float("inf")] * num_ues)
+            reliabilities.extend([0.0] * num_ues)
+            continue
 
-    if not latencies:
+        # Calculate latencies for each UPF path
+        upf_latencies = []
+        for upf_id in connected_upfs:
+            distance = distances[gnb_id][upf_id]
+            transport_latency = 2 * (distance / SPEED)  # Round trip
+            core_latency = PROCESSING_DELAY_PER_UPF
+            total_latency = radio_latency + transport_latency + core_latency
+            upf_latencies.append(total_latency)
+
+        # Latency metrics for this gNB
+        gnb_worst = max(upf_latencies)
+        gnb_best = min(upf_latencies)
+        gnb_avg = sum(upf_latencies) / len(upf_latencies)
+
+        latency_worst.extend([gnb_worst] * num_ues)
+        latency_best.extend([gnb_best] * num_ues)
+        latency_avg.extend([gnb_avg] * num_ues)
+
+        # Reliability for this gNB
+        num_upfs_connected = len(connected_upfs)
+        reliability = 1 - (1 - radio_reliability_round_trip) ** num_upfs_connected
+        reliabilities.extend([reliability] * num_ues)
+
+    # Aggregate results
+    def get_stats(values):
+        valid = [v for v in values if v != float("inf")]
         return {
-            "best_latency": 0,
-            "worst_latency": 0,
-            "average_latency": 0,
-            "best_reliability": 0,
-            "worst_reliability": 0,
-            "average_reliability": 0,
+            "worst": max(valid) if valid else 0,
+            "best": min(valid) if valid else 0,
+            "average": sum(valid) / len(valid) if valid else 0,
         }
 
+    latency_stats = get_stats(latency_avg)  # Use avg for overall topology
+    reliability_stats = {
+        "worst": min(reliabilities),
+        "best": max(reliabilities),
+        "average": sum(reliabilities) / len(reliabilities) if reliabilities else 0,
+    }
+
     return {
-        "best_latency": min(latencies),
-        "worst_latency": max(latencies),
-        "average_latency": sum(latencies) / len(latencies),
-        "best_reliability": max(reliabilities),
-        "worst_reliability": min(reliabilities),
-        "average_reliability": sum(reliabilities) / len(reliabilities),
+        "best_latency": latency_stats["best"],
+        "worst_latency": latency_stats["worst"],
+        "average_latency": latency_stats["average"],
+        "best_reliability": reliability_stats["best"],
+        "worst_reliability": reliability_stats["worst"],
+        "average_reliability": reliability_stats["average"],
     }
 
 
@@ -135,7 +158,10 @@ def topology():
     # 2) Compute detailed metrics
     # If UEs are uniformly divided, build a list per gNB
     per = [nbUE // nbgNB + (1 if i < (nbUE % nbgNB) else 0) for i in range(nbgNB)]
-    metrics = compute_metrics(distances, per)
+    distances = [
+        [float(value) if value.strip() else None for value in row] for row in distances
+    ]
+    metrics = calculate_metrics(nbUPF, nbgNB, per, distances, links)
 
     # 3) Return
     return jsonify({**metrics})
