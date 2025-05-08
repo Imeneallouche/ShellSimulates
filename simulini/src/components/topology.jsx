@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Line } from "@react-three/drei";
+import { OrbitControls, Line, Text } from "@react-three/drei";
 
 /**
  * Props:
@@ -97,49 +97,100 @@ export default function Topology3D({ nbUPF, nbgNB, nbUE, distances, links }) {
     <Canvas camera={{ position: [0, 0, 30], fov: 50 }}>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} />
-
       {/* UPFs */}
       {upfPositions.map((pos, idx) => (
-        <mesh key={`upf-${idx}`} position={pos}>
-          <sphereGeometry args={[1, 16, 16]} />
-          <meshPhongMaterial color="orange" />
-        </mesh>
+        <group key={`upf-${idx}`} position={pos}>
+          <mesh>
+            <boxGeometry args={[2, 2, 0.2]} />
+            <meshStandardMaterial color="#F97316" /> {/* orange-500 */}
+          </mesh>
+          <Text
+            position={[0, 0, 0.21]}
+            fontSize={0.6}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+          >
+            UPF
+          </Text>
+          <Text
+            position={[0, 0, -0.21]}
+            rotation={[0, Math.PI, 0]}
+            fontSize={0.6}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+          >
+            UPF
+          </Text>
+        </group>
       ))}
 
       {/* gNBs */}
       {gnbPositions.map((pos, idx) => (
-        <mesh key={`gnb-${idx}`} position={pos}>
-          <boxGeometry args={[1.5, 1.5, 1.5]} />
-          <meshPhongMaterial color="cyan" />
-        </mesh>
+        <group key={`gnb-${idx}`} position={pos}>
+          <mesh>
+            <boxGeometry args={[2, 2, 0.2]} />
+            <meshStandardMaterial color="#6366F1" /> {/* indigo-500 */}
+          </mesh>
+          <Text
+            position={[0, 0, 0.21]}
+            fontSize={0.6}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+          >
+            GNb
+          </Text>
+          <Text
+            position={[0, 0, -0.21]}
+            rotation={[0, Math.PI, 0]}
+            fontSize={0.6}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+          >
+            GNb
+          </Text>
+        </group>
       ))}
 
       {/* UEs */}
       {uePositions.map((pos, idx) => (
-        <mesh key={`ue-${idx}`} position={pos}>
-          <sphereGeometry args={[0.5, 12, 12]} />
-          <meshPhongMaterial color="lightgreen" />
-        </mesh>
+        <group key={`ue-${idx}`} position={pos}>
+          <mesh>
+            <boxGeometry args={[1.5, 1.5, 0.2]} />
+            <meshStandardMaterial color="#10B981" /> {/* emerald-500 */}
+          </mesh>
+          <Text
+            position={[0, 0, 0.21]}
+            fontSize={0.5}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+          >
+            UE
+          </Text>
+          <Text
+            position={[0, 0, -0.21]}
+            rotation={[0, Math.PI, 0]}
+            fontSize={0.5}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+          >
+            UE
+          </Text>
+        </group>
       ))}
 
       {/* Lines */}
-      {ueGnbLines.map((l, idx) => (
-        <Line key={`ue-gnb-line-${idx}`} points={l.points} lineWidth={1} />
-      ))}
-      {gnbUpfLines.map((l, idx) => (
+      {[...ueGnbLines, ...gnbUpfLines, ...upfUpfLines].map((l, idx) => (
         <Line
-          key={`gnb-upf-line-${idx}`}
+          key={`line-${idx}`}
           points={l.points}
-          lineWidth={1}
-          dashed
-        />
-      ))}
-      {upfUpfLines.map((l, idx) => (
-        <Line
-          key={`upf-upf-line-${idx}`}
-          points={l.points}
-          lineWidth={1}
-          dashed
+          color="black"
+          lineWidth={2} // Thick lines
         />
       ))}
 
