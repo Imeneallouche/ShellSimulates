@@ -233,13 +233,13 @@ export default function Simulate() {
               <div className="flex space-x-4 text-sm">
                 <div>
                   <div className="text-2xl font-semibold">
-                    {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
+                    {result ? (result.best_latency * 1e3).toFixed(2) : "-"}{" "}
                   </div>
                   <div className="text-gray-400 uppercase">best</div>
                 </div>
                 <div>
                   <div className="text-2xl font-semibold">
-                    {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
+                    {result ? (result.worst_latency * 1e3).toFixed(2) : "-"}{" "}
                   </div>
                   <div className="text-gray-400 uppercase">worst</div>
                 </div>
@@ -262,9 +262,8 @@ export default function Simulate() {
               {["best", "worst", "average"].map((label, i) => (
                 <div key={i} className="flex flex-col items-center">
                   <div className="h-16 w-16 bg-gray-800 rounded-full flex items-center justify-center text-gray-500">
-                    per
+                    {result ? result.average_reliability.toFixed(2) : "-"}{" "}
                   </div>
-                  <div className="text-xs mt-1">70%</div>
                   <div className="text-[10px] text-gray-400">{label}</div>
                 </div>
               ))}
