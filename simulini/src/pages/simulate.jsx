@@ -11,10 +11,11 @@ export default function Simulate() {
   const [nbUE, setNbUE] = useState(1);
 
   const [distances, setDistances] = useState([[""]]);
-  const [links, setLinks] = useState([[false]]);
+  const [links, setLinks] = useState([[""]]);
 
   const [result, setResult] = useState(null);
 
+  const [pdnLinks, setPdnLinks] = useState([""]);
   // Called when the user clicks “Submit”
   const handleSubmit = async () => {
     try {
@@ -50,11 +51,26 @@ export default function Simulate() {
     // Links matrix (UPF-to-UPF)
     setLinks((prev) => {
       const newLinks = Array.from({ length: nbUPF }, (_, i) =>
-        Array.from({ length: nbUPF }, (_, j) => prev[i]?.[j] ?? false)
+        Array.from({ length: nbUPF }, (_, j) => prev[i]?.[j] ?? "")
       );
       return newLinks;
     });
+
+    // PDN links: one row of length nbUPF
+    setPdnLinks((prev) =>
+      Array.from({ length: nbUPF }, (_, i) => prev[i] ?? "")
+    );
   }, [nbUPF, nbgNB]);
+
+  // NEW: handler for PDN → UPF distance input
+  const handlePdnLinkChange = (i, value) => {
+    setPdnLinks((prev) => {
+      const copy = [...prev];
+      copy[i] = value;
+      return copy;
+    });
+  };
+
   const location = useLocation();
 
   useEffect(() => {
@@ -75,8 +91,8 @@ export default function Simulate() {
           ["5", "5"], // gNB1 → UPF0 & UPF1
         ]);
         setLinks([
-          [false, false],
-          [false, false],
+          ["", ""],
+          ["", ""],
         ]);
       } else if (preset === "complex") {
         setNbUPF(3);
@@ -88,9 +104,9 @@ export default function Simulate() {
           ["", "5", "10"], // gNB2 → UPF1 & UPF2
         ]);
         setLinks([
-          [false, true, false],
-          [true, false, true],
-          [false, true, false],
+          ["", "10", ""],
+          ["10", "", "10"],
+          ["", "10", ""],
         ]);
       }
     }
@@ -106,10 +122,10 @@ export default function Simulate() {
   };
 
   // handle link checkbox change
-  const handleLinkChange = (i, j, checked) => {
+  const handleLinkChange = (i, j, value) => {
     setLinks((prev) => {
       const copy = prev.map((row) => [...row]);
-      copy[i][j] = checked;
+      copy[i][j] = value;
       return copy;
     });
   };
@@ -232,10 +248,11 @@ export default function Simulate() {
                       <td key={colIdx} className="px-1 py-0.5 text-center">
                         {colIdx > rowIdx ? (
                           <input
-                            type="checkbox"
-                            checked={links[rowIdx]?.[colIdx] || false}
+                            type="text"
+                            className="w-full bg-blue-300 text-sm text-white px-4 py-1 rounded"
+                            value={links[rowIdx]?.[colIdx] ?? ""}
                             onChange={(e) =>
-                              handleLinkChange(rowIdx, colIdx, e.target.checked)
+                              handleLinkChange(rowIdx, colIdx, e.target.value)
                             }
                           />
                         ) : null}
@@ -243,6 +260,44 @@ export default function Simulate() {
                     ))}
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PDN → UPF Distance Table */}
+          <div className="bg-gray-100 p-4 rounded border-2 border-green-500 mt-4">
+            <h3 className="text-sm font-semibold uppercase">
+              PDN to UPF Distances
+            </h3>
+            <p className="text-xs text-green-500"></p>
+            <table className="w-full mt-3 text-xs table-fixed">
+              <thead>
+                <tr>
+                  <th className="px-1 text-left">UPF</th>
+                  {Array.from({ length: nbUPF }, (_, idx) => (
+                    <th key={idx} className="px-1 text-center">
+                      {idx + 1}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="px-1 py-0.5 text-left"></td>
+                  {Array.from({ length: nbUPF }, (_, upfIdx) => (
+                    <td key={upfIdx} className="px-1 py-0.5 text-center">
+                      <input
+                        type="text"
+                        className="w-full bg-green-200 text-sm text-black px-2 py-1 rounded"
+                        value={pdnLinks[upfIdx] ?? ""}
+                        onChange={(e) =>
+                          handlePdnLinkChange(upfIdx, e.target.value)
+                        }
+                        placeholder=""
+                      />
+                    </td>
+                  ))}
+                </tr>
               </tbody>
             </table>
           </div>
@@ -264,6 +319,7 @@ export default function Simulate() {
               nbUE={nbUE}
               distances={distances}
               links={links}
+              pdnLinks={pdnLinks}
             />
           </div>
         </main>

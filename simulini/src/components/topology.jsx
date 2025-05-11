@@ -8,9 +8,17 @@ import { OrbitControls, Line, Text } from "@react-three/drei";
  *  - nbgNB: number of gNBs
  *  - nbUE: number of UEs
  *  - distances: matrix [gnbIdx][upfIdx] of distance ("" or numeric string)
- *  - links: boolean matrix [upfIdx][upfIdx]
+ *  - links:  matrix [upfIdx][upfIdx] of distance ("" or numeric string)
+ *  - pdnLinks: array[upIdx] of distance ("" or numeric string)
  */
-export default function Topology3D({ nbUPF, nbgNB, nbUE, distances, links }) {
+export default function Topology3D({
+  nbUPF,
+  nbgNB,
+  nbUE,
+  distances,
+  links,
+  pdnLinks,
+}) {
   // Compute positions
   const upfPositions = useMemo(() => {
     const spread = 8;
@@ -20,6 +28,9 @@ export default function Topology3D({ nbUPF, nbgNB, nbUE, distances, links }) {
       0,
     ]);
   }, [nbUPF]);
+
+  // Single PDN at the top-center
+  const pdnPosition = useMemo(() => [0, 10, 0], []);
 
   const gnbPositions = useMemo(() => {
     const spread = 8;
@@ -93,10 +104,39 @@ export default function Topology3D({ nbUPF, nbgNB, nbUE, distances, links }) {
     return lines;
   }, [links, upfPositions, nbUPF]);
 
+  // PDN->UPF links based on pdnLinks array
+  const pdnUpfLines = useMemo(() => {
+    const lines = [];
+    for (let i = 0; i < nbUPF; i++) {
+      const d = pdnLinks[i];
+      if (d !== "" && !isNaN(Number(d))) {
+        lines.push({ points: [pdnPosition, upfPositions[i]] });
+      }
+    }
+    return lines;
+  }, [pdnLinks, pdnPosition, upfPositions, nbUPF]);
+
   return (
     <Canvas camera={{ position: [0, 0, 30], fov: 50 }}>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} />
+
+      {/* Private Data Network */}
+      <group position={pdnPosition}>
+        <mesh>
+          <sphereGeometry args={[1.2, 16, 16]} />
+          <meshStandardMaterial color="#EF4444" /> {/* red-500 */}
+        </mesh>
+        <Text
+          position={[0, 0, 1.3]}
+          fontSize={0.7}
+          color="white"
+          anchorX="center"
+          anchorY="middle"
+        >
+          PDN
+        </Text>
+      </group>
       {/* UPFs */}
       {upfPositions.map((pos, idx) => (
         <group key={`upf-${idx}`} position={pos}>
@@ -185,14 +225,16 @@ export default function Topology3D({ nbUPF, nbgNB, nbUE, distances, links }) {
       ))}
 
       {/* Lines */}
-      {[...ueGnbLines, ...gnbUpfLines, ...upfUpfLines].map((l, idx) => (
-        <Line
-          key={`line-${idx}`}
-          points={l.points}
-          color="black"
-          lineWidth={2} // Thick lines
-        />
-      ))}
+      {[...ueGnbLines, ...gnbUpfLines, ...upfUpfLines, ...pdnUpfLines].map(
+        (l, idx) => (
+          <Line
+            key={`line-${idx}`}
+            points={l.points}
+            color="black"
+            lineWidth={2} // Thick lines
+          />
+        )
+      )}
 
       <OrbitControls />
     </Canvas>
