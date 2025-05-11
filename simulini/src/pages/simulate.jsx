@@ -6,22 +6,26 @@ import axios from "axios";
 import { useLocation } from "react-router-dom";
 
 export default function Simulate() {
+  const [nbDN, setNbDN] = useState(1);
   const [nbUPF, setNbUPF] = useState(1);
   const [nbgNB, setNbgNB] = useState(1);
   const [nbUE, setNbUE] = useState(1);
 
+  const [dnUpfDistances, setDnUpfDistances] = useState([[""]]);
   const [distances, setDistances] = useState([[""]]);
   const [links, setLinks] = useState([[false]]);
 
   const [result, setResult] = useState(null);
 
-  // Called when the user clicks “Submit”
+  // Called when the user clicks "Submit"
   const handleSubmit = async () => {
     try {
       const payload = {
+        nbDN,
         nbUPF,
         nbgNB,
         nbUE,
+        dnUpfDistances,
         distances,
         links,
       };
@@ -39,9 +43,17 @@ export default function Simulate() {
 
   // adjust matrices when dimensions change
   useEffect(() => {
-    // Distance matrix
+    // Distance matrix between gNBs and UPFs
     setDistances((prev) => {
       const newDist = Array.from({ length: nbgNB }, (_, i) =>
+        Array.from({ length: nbUPF }, (_, j) => prev[i]?.[j] ?? "")
+      );
+      return newDist;
+    });
+
+    // Distance matrix between DNs and UPFs
+    setDnUpfDistances((prev) => {
+      const newDist = Array.from({ length: nbDN }, (_, i) =>
         Array.from({ length: nbUPF }, (_, j) => prev[i]?.[j] ?? "")
       );
       return newDist;
@@ -54,22 +66,29 @@ export default function Simulate() {
       );
       return newLinks;
     });
-  }, [nbUPF, nbgNB]);
+  }, [nbDN, nbUPF, nbgNB]);
+
   const location = useLocation();
 
   useEffect(() => {
     if (location.state?.preset) {
       const preset = location.state.preset;
       if (preset === "simple") {
+        setNbDN(1);
         setNbUPF(1);
         setNbgNB(1);
         setNbUE(3);
+        setDnUpfDistances([["5"]]); // DN0 → UPF0
         setDistances([["10"]]); // gNB0 → UPF0
         setLinks([[false]]);
       } else if (preset === "medium") {
+        setNbDN(1);
         setNbUPF(2);
         setNbgNB(2);
         setNbUE(5);
+        setDnUpfDistances([
+          ["10", "10"],   // DN0 → UPF0 & UPF1
+        ]);
         setDistances([
           ["10", ""],   // gNB0 → UPF0
           ["5", "5"],   // gNB1 → UPF0 & UPF1
@@ -79,9 +98,13 @@ export default function Simulate() {
           [false, false],
         ]);
       } else if (preset === "complex") {
+        setNbDN(1);
         setNbUPF(3);
         setNbgNB(3);
         setNbUE(7);
+        setDnUpfDistances([
+          ["10", "10", "10"],     // DN0 → UPF0 & UPF1
+        ]);
         setDistances([
           ["10", "5", ""],     // gNB0 → UPF0 & UPF1
           ["10", "10", "10"],  // gNB1 → all UPFs
@@ -96,7 +119,16 @@ export default function Simulate() {
     }
   }, [location.state]);
 
-  // handle distance cell change
+  // handle DN-UPF distance cell change
+  const handleDnUpfDistanceChange = (i, j, value) => {
+    setDnUpfDistances((prev) => {
+      const copy = prev.map((row) => [...row]);
+      copy[i][j] = value;
+      return copy;
+    });
+  };
+
+  // handle gNB-UPF distance cell change
   const handleDistanceChange = (i, j, value) => {
     setDistances((prev) => {
       const copy = prev.map((row) => [...row]);
@@ -115,23 +147,23 @@ export default function Simulate() {
   };
 
   return (
-    <div className="h-screen w-full bg-white text-black
-     flex flex-col">
+    <div className="h-screen w-full bg-white text-black flex flex-col">
       {/* Top Stats Bar */}
       <SideBar />
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
         <aside className="w-96 bg-white border-2 border-blue-500 p-4 space-y-6 overflow-y-auto">
-          {/* UE input */}
+          {/* DN input */}
           <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
-            <h3 className="text-sm font-semibold uppercase">Number of UEs</h3>
-
+            <h3 className="text-sm font-semibold uppercase">Number of DNs</h3>
             <input
-              type="number"
               className="w-full bg-blue-300 text-sm text-white px-3 py-1 rounded"
-              value={nbUE}
+              type="number"
+              min="1"
+              max="10"
+              value={nbDN}
               onChange={(e) =>
-                setNbUE(Math.max(1, Math.min(100, +e.target.value)))
+                setNbDN(Math.max(1, Math.min(10, +e.target.value)))
               }
             />
           </div>
@@ -166,12 +198,64 @@ export default function Simulate() {
             />
           </div>
 
-          {/* Distance matrix */}
+          {/* UE input */}
+          <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
+            <h3 className="text-sm font-semibold uppercase">Number of UEs</h3>
+            <input
+              type="number"
+              className="w-full bg-blue-300 text-sm text-white px-3 py-1 rounded"
+              value={nbUE}
+              onChange={(e) =>
+                setNbUE(Math.max(1, Math.min(100, +e.target.value)))
+              }
+            />
+          </div>
+
+          {/* DN-UPF Distance matrix */}
           <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
             <h3 className="text-sm font-semibold uppercase">
-              Distance between UPFs and gNBs
+              Distance between DNs and UPFs
             </h3>
-            <p className="text-xs text-blue-500">between each UPF and gNB</p>
+            <p className="text-xs text-blue-500">between each DN and UPF</p>
+            <table className="w-full mt-3 text-xs table-fixed">
+              <thead>
+                <tr>
+                  <th className="px-1 text-left">DN \ UPF</th>
+                  {Array.from({ length: nbUPF }, (_, upfIdx) => (
+                    <th key={upfIdx} className="px-1 text-center">
+                      {upfIdx + 1}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: nbDN }, (_, dnIdx) => (
+                  <tr key={dnIdx} className={dnIdx % 2 ? "" : ""}>
+                    <td className="px-1 py-0.5 text-left">{dnIdx + 1}</td>
+                    {Array.from({ length: nbUPF }, (_, upfIdx) => (
+                      <td key={upfIdx} className="px-1 py-0.5">
+                        <input
+                          type="text"
+                          className="w-full bg-blue-300 text-sm text-white px-4 py-1 rounded"
+                          value={dnUpfDistances[dnIdx]?.[upfIdx] ?? ""}
+                          onChange={(e) =>
+                            handleDnUpfDistanceChange(dnIdx, upfIdx, e.target.value)
+                          }
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* gNB-UPF Distance matrix */}
+          <div className="bg-gray-100 p-4 rounded border-2 border-blue-500">
+            <h3 className="text-sm font-semibold uppercase">
+              Distance between gNBs and UPFs
+            </h3>
+            <p className="text-xs text-blue-500">between each gNB and UPF</p>
             <table className="w-full mt-3 text-xs table-fixed">
               <thead>
                 <tr>
@@ -242,7 +326,6 @@ export default function Simulate() {
                   </tr>
                 ))}
               </tbody>
-
             </table>
           </div>
 
@@ -258,9 +341,11 @@ export default function Simulate() {
         <main className="flex-1 relative bg-gray-100">
           <div className="absolute inset-0 flex items-center justify-center">
             <Topology3D
+              nbDN={nbDN}
               nbUPF={nbUPF}
               nbgNB={nbgNB}
               nbUE={nbUE}
+              dnUpfDistances={dnUpfDistances}
               distances={distances}
               links={links}
             />

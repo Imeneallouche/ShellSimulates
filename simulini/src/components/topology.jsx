@@ -4,14 +4,25 @@ import { OrbitControls, Line, Text } from "@react-three/drei";
 
 /**
  * Props:
+ *  - nbDN: number of DNs (Data Networks)
  *  - nbUPF: number of UPFs
  *  - nbgNB: number of gNBs
  *  - nbUE: number of UEs
- *  - distances: matrix [gnbIdx][upfIdx] of distance ("" or numeric string)
- *  - links: boolean matrix [upfIdx][upfIdx]
+ *  - dnUpfDistances: matrix [dnIdx][upfIdx] of distance between DNs and UPFs
+ *  - distances: matrix [gnbIdx][upfIdx] of distance between gNBs and UPFs
+ *  - links: boolean matrix [upfIdx][upfIdx] for UPF connections
  */
-export default function Topology3D({ nbUPF, nbgNB, nbUE, distances, links }) {
+export default function Topology3D({ nbDN, nbUPF, nbgNB, nbUE, dnUpfDistances, distances, links }) {
   // Compute positions
+  const dnPositions = useMemo(() => {
+    const spread = 8;
+    return Array.from({ length: nbDN }, (_, i) => [
+      (i - (nbDN - 1) / 2) * spread,
+      10,
+      0,
+    ]);
+  }, [nbDN]);
+
   const upfPositions = useMemo(() => {
     const spread = 8;
     return Array.from({ length: nbUPF }, (_, i) => [
@@ -93,10 +104,54 @@ export default function Topology3D({ nbUPF, nbgNB, nbUE, distances, links }) {
     return lines;
   }, [links, upfPositions, nbUPF]);
 
+  // DN->UPF lines based on dnUpfDistances matrix
+  const dnUpfLines = useMemo(() => {
+    const lines = [];
+    for (let i = 0; i < nbDN; i++) {
+      for (let j = 0; j < nbUPF; j++) {
+        const d = dnUpfDistances[i]?.[j];
+        if (d !== "" && !isNaN(Number(d))) {
+          lines.push({ points: [dnPositions[i], upfPositions[j]] });
+        }
+      }
+    }
+    return lines;
+  }, [dnUpfDistances, dnPositions, upfPositions, nbDN, nbUPF]);
+
   return (
     <Canvas camera={{ position: [0, 0, 30], fov: 50 }}>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} />
+
+      {/* DNs */}
+      {dnPositions.map((pos, idx) => (
+        <group key={`dn-${idx}`} position={pos}>
+          <mesh>
+            <boxGeometry args={[2.2, 2.2, 0.2]} />
+            <meshStandardMaterial color="#8B5CF6" /> {/* violet-500 */}
+          </mesh>
+          <Text
+            position={[0, 0, 0.21]}
+            fontSize={0.6}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+          >
+            DN
+          </Text>
+          <Text
+            position={[0, 0, -0.21]}
+            rotation={[0, Math.PI, 0]}
+            fontSize={0.6}
+            color="white"
+            anchorX="center"
+            anchorY="middle"
+          >
+            DN
+          </Text>
+        </group>
+      ))}
+
       {/* UPFs */}
       {upfPositions.map((pos, idx) => (
         <group key={`upf-${idx}`} position={pos}>
@@ -184,9 +239,8 @@ export default function Topology3D({ nbUPF, nbgNB, nbUE, distances, links }) {
         </group>
       ))}
 
-
       {/* Lines */}
-      {[...ueGnbLines, ...gnbUpfLines, ...upfUpfLines].map((l, idx) => (
+      {[...ueGnbLines, ...gnbUpfLines, ...upfUpfLines, ...dnUpfLines].map((l, idx) => (
         <Line
           key={`line-${idx}`}
           points={l.points}
