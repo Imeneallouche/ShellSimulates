@@ -25,6 +25,7 @@ export default function Simulate() {
         nbUE,
         distances,
         links,
+        pdnLinks,
       };
 
       const resp = await axios.post(
