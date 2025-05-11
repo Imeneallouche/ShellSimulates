@@ -124,12 +124,22 @@ export default function Topology3D({
       {/* Private Data Network */}
       <group position={pdnPosition}>
         <mesh>
-          <sphereGeometry args={[1.2, 16, 16]} />
-          <meshStandardMaterial color="#EF4444" /> {/* red-500 */}
+          <boxGeometry args={[2, 2, 0.2]} />
+          <meshStandardMaterial color="#000000" />
         </mesh>
         <Text
-          position={[0, 0, 1.3]}
+          position={[0, 0, 0.21]}
           fontSize={0.7}
+          color="white"
+          anchorX="center"
+          anchorY="middle"
+        >
+          PDN
+        </Text>
+        <Text
+          position={[0, 0, -0.21]}
+          rotation={[0, Math.PI, 0]}
+          fontSize={0.6}
           color="white"
           anchorX="center"
           anchorY="middle"
@@ -180,7 +190,7 @@ export default function Topology3D({
             anchorX="center"
             anchorY="middle"
           >
-            GNb
+            gNB
           </Text>
           <Text
             position={[0, 0, -0.21]}
