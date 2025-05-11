@@ -1,123 +1,254 @@
-# V2X (Vehicle-to-Everything)
+## Table of Contents
 
-3GPP defines a 5G-V2X architecture in which vehicles (UEs) connect via NG-RAN (gNBs) to the 5G Core (including the UPF).  In a **single-cell** topology, multiple V2X UEs (e.g. vehicles) attach to the same gNB, which then forwards traffic to a UPF in the core.  In a **multi-cell** setup, vehicles in different cells connect to their respective gNBs, which share a common core (UPF) for routing V2X data. These topologies correspond to the 3GPP non-roaming V2X reference architecture.
+* [Project Overview](#project-overview)
+* [Key Features](#key-features)
+* [Architecture](#architecture)
+* [Installation](#installation)
+* [Usage](#usage)
+* [Configuration](#configuration)
+* [Extending & Customization](#extending--customization)
+* [Performance Models](#performance-models)
+* [Contributing](#contributing)
+* [License](#license)
+* [References](#references)
 
-* *Variation 1 – Single gNB:* All V2X UEs attach to one gNB, which connects to a UPF.
+---
 
-  ```mermaid
-  graph LR
-    UE1 --> gNB
-    UE2 --> gNB
-    UE3 --> gNB
-    gNB --> UPF
-  ```
-* *Variation 2 – Multi gNB:* V2X UEs attach to different gNBs; each gNB connects to the same UPF in the core.
+## Project Overview
 
-  ```mermaid
-  graph LR
-    UE1 --> gNB1
-    UE2 --> gNB2
-    UE3 --> gNB3
-    gNB1 --> UPF
-    gNB2 --> UPF
-    gNB3 --> UPF
-  ```
+**ShellSimulate** is an integrated emulator + simulator for private 5G URLLC networks.  It lets you **spin up arbitrary topologies**—defining numbers of UPFs, gNBs, UEs, and inter-node distances—via a **free5GC-compose** backend, while **analytically estimating** end-to-end latency and reliability based on URLLC models.
 
-  These illustrate how V2X UEs in one or multiple cells are handled by gNB(s) and the UPF (data network).
+By colocating UPFs at different network “edges,” you can explore latency budgets (≤ 1 ms) and “five-9s” reliability (99.999 %) targets under varying UE loads, distances, and redundancy schemes.
 
-# Industrial Automation
+---
 
-Industrial URLLC often uses *local private 5G networks* on factory premises. In this case each gNB connects to an on-site 5G core (UPF). A common **star topology** has many industrial UEs (sensors, robots, controllers) attaching to a single factory gNB, which forwards data to a UPF. More advanced URLLC setups use **path-diverse** connectivity: for example an automated guided vehicle (AGV) may be simultaneously served by multiple gNBs. In one illustrative scenario, an AGV (“UE”) is connected via redundant links to two or more synchronized gNBs, each of which then connects into the same UPF. This multi-gNB (CoMP) topology increases reliability by sending duplicate data streams over multiple paths.
+## Key Features
 
-* *Variation 1 – Single gNB:* All factory devices connect to one gNB, which connects to the local UPF.
+1. **Topology Designer UI**
 
-  ```mermaid
-  graph LR
-    Sensor1 --> gNB
-    Sensor2 --> gNB
-    Sensor3 --> gNB
-    gNB --> UPF
-  ```
-* *Variation 2 – Multi gNB (Path Diversity):* A critical UE (e.g. AGV) connects to several gNBs; each gNB connects to the UPF.
+   * Web-based React interface built with **react-three-fiber**, enabling drag-and-drop placement of UPFs, gNBs, and UEs in 3D
+   * Live editing of distance matrices (gNB↔UPF, UPF↔UPF, DN↔UPF) and UE distribution.
 
-  ```mermaid
-  graph LR
-    AGV --> gNB1
-    AGV --> gNB2
-    gNB1 --> UPF
-    gNB2 --> UPF
-  ```
+2. **Automated 5G Emulation**
 
-  Here the AGV (“UE”) is served by two base stations (gNB1, gNB2) for extra reliability, as described in industrial URLLC deployments.
+   * Generates Jinja2-templated `docker-compose.yml` for **free5gc-compose** to instantiate NFs (AMF/SMF/UPF) and optional UERANSIM containers
+   * One-click deployment and teardown of your private 5G core network.
 
-# Healthcare
+3. **URLLC Performance Simulation**
 
-5G URLLC in healthcare may involve hospitals, patient devices, and emergency vehicles.  In a **hospital-based private network**, UEs (medical sensors, monitors, AR/VR surgical tools, etc.) connect to local gNBs which link to the core UPF.  For example, a smart-healthcare architecture shows UEs in a hospital attaching to small and macro gNBs, which then reach the 5G core.  One topology uses a single macro gNB per facility; another uses a two-tier cell structure (small-cell gNBs connecting into a macro gNB to reach the core).
+   * **Latency**: combines **propagation delays** $d/v$ in fiber (v≈2×10⁸ m/s) plus **M/M/1 queueing** at gNBs to model scheduling delays
+   * **Reliability**: uses BPSK **BER** via Q-function and packet-success $(1-\text{BER})^L$ to estimate link and end-to-end success probabilities
 
-* *Variation 1 – Single-tier (Macro only):* All medical UEs connect to one macro gNB in the hospital, which connects to the UPF.
+4. **Metric Aggregation**
 
-  ```mermaid
-  graph LR
-    Device1 --> gNB
-    Device2 --> gNB
-    Device3 --> gNB
-    gNB --> UPF
-  ```
-* *Variation 2 – Two-tier (Macro + Small cell):* UEs connect to a small-cell gNB, which backhauls via a macro gNB to the UPF.
+   * Computes **best**, **worst**, and **average** latency (s) and reliability (0–1) across all links or per-gNB aggregates.
+   * Returns metrics via Flask JSON API for frontend visualization.
 
-  ```mermaid
-  graph LR
-    Device1 --> SBS
-    Device2 --> SBS
-    SBS --> MBS
-    MBS --> UPF
-  ```
+5. **Real-time Updates**
 
-  These reflect architectures where hospital devices connect through small and macro cells into the core network.
+   * Topology changes (node counts, distances, links) immediately re-render the 3D scene and re-compute metrics.
 
-# AR/VR
+---
 
-Augmented/Virtual Reality headsets and devices are also URLLC UEs in private 5G networks (e.g. for real-time telepresence or remote control).  Like other domains, AR/VR UEs attach to gNBs that route traffic through the UPF.  For instance, multiple AR/VR headsets in a training room may share a single gNB (star topology), or a moving headset may be served by two gNBs during a handover to prevent interruptions.  (AR/VR is identified as a URLLC use case for low-latency immersive video.)
+## Architecture
 
-* *Variation 1 – Single gNB:* All AR/VR UEs connect to one gNB, which connects to the UPF.
+```text
+┌──────────────────────┐        ┌──────────────┐       ┌─────────┐
+│  React Frontend      │ ↔ REST │  Flask API   │ ↔ CLI │ free5gc-│
+│  (Topology3D, UI)    │        │ (Jinja2,     │       │ compose │
+│  (@react-three/fiber)│        │  metrics)    │       │ emoted  │
+└──────────────────────┘        └──────────────┘       └─────────┘
+```
 
-  ```mermaid
-  graph LR
-    Headset1 --> gNB
-    Headset2 --> gNB
-    Headset3 --> gNB
-    gNB --> UPF
-  ```
-* *Variation 2 – Multi gNB:* A mobile AR/VR UE connects simultaneously to two gNBs (for redundancy or seamless coverage), each linking to the UPF.
+* **Frontend**
 
-  ```mermaid
-  graph LR
-    Headset --> gNB1
-    Headset --> gNB2
-    gNB1 --> UPF
-    gNB2 --> UPF
-  ```
+  * **React** for UI state, forms, and 3D visualization with **@react-three/fiber** and **drei** helpers 
+* **Backend**
 
-  These illustrate typical AR/VR setups on a private 5G network (often combined with edge compute), where UEs connect through one or multiple base stations to the core.
+  * **Flask** REST service with **CORS** and **Jinja2** for templating `docker-compose.yml` 
+  * **Metrics** module implements URLLC analytical equations.
+* **Emulation**
 
-# Smart Grid
+  * **free5GC-compose**, a Docker Compose variant of free5GC core network (AMF/SMF/UPF) 
+  * Optional UERANSIM integration for RAN/UE simulation.
 
-Smart grid deployments use private 5G to connect power grid devices (meters, sensors, controllers) with low latency. UEs like substation controllers attach to gNBs that forward data to the UPF/core.  For example, private 5G enables real-time coordination between substations and control centers.
+---
 
-* *Variation 1 – Single gNB:* Multiple grid sensors (UEs) connect to one gNB at a substation, which connects to the UPF.
+## Installation
 
-  ```mermaid
-  graph LR
-    SensorA --> gNB
-    SensorB --> gNB
-    gNB --> UPF
-  ```
-* *Variation 2 – Multi gNB:* Different substations each have their own gNB, all connected to a central UPF.
+1. **Prerequisites**
 
-  ```mermaid
-  graph LR
-    Sensor1 --> gNB1
-    Sensor2 --> gNB2
-    gNB1 --> UPF
-    gNB2 --> UPF
-  ```
+   * **Docker Engine** & **Docker Compose v2**. 
+   * **Node.js** + **npm** (≥ 18.x).
+   * **Python 3.9+**, **pip**.
+
+2. **Clone Repository**
+
+   ```bash
+   git clone https://github.com/your-org/shell-simulate.git
+   cd shell-simulate
+   ```
+
+3. **Backend Setup**
+
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   ```
+
+4. **Frontend Setup**
+
+   ```bash
+   cd ../frontend
+   npm install react react-dom @react-three/fiber @react-three/drei axios
+   ```
+
+5. **free5gc-compose**
+
+   ```bash
+   # alongside your project directory
+   git clone https://github.com/free5gc/free5gc-compose.git
+   ```
+
+---
+
+## Usage
+
+1. **Start Backend**
+
+   ```bash
+   cd backend
+   python app.py
+   ```
+
+2. **Start Frontend**
+
+   ```bash
+   cd frontend
+   npm start
+   ```
+
+3. **Access UI**
+   Open `http://localhost:3000`, design your topology, then click **Submit**.
+
+4. **View Metrics**
+   Best/Worst/Average latency (s) and reliability (0–1) appear overlaid; convert to ms or % for reporting.
+
+5. **Inspect Containers**
+   Each run creates a temp workdir under `/tmp/free5gc_run_*` with its own `docker-compose.yml` and logs.
+
+---
+
+## Configuration
+
+* **Templates**
+
+  * Edit `templates/docker-compose.yml.j2` to adjust NF images, commands, or network subnets.
+
+* **System Parameters**
+
+  * In `backend/app.py`, tune `V_FIBER`, `MU_GNB`, `LAMBDA_P`, and packet size `L_BITS` to match your desired URLLC profile.
+
+---
+
+## Extending & Customization
+
+* **Add gNB Emulation**
+
+  * Integrate **UERANSIM** or **srsRAN** containers in your Jinja2 templates for realistic RAN/UE traffic ([GitHub][5]).
+* **Advanced Queueing**
+
+  * Replace M/M/1 with M/D/1 or G/G/1 models by extending the `compute_metrics` function.
+* **Topology Persistence**
+
+  * Store topologies in a database (e.g., SQLite) and load presets in the UI.
+
+---
+
+## Performance Models
+
+1. **Propagation Delay**
+
+   $$
+     t^{\rm prop}_{ij} = \frac{d_{ij}}{v}, 
+     \quad v \approx 2\times10^8\;\mathrm{m/s}
+   \] :contentReference[oaicite:11]{index=11}
+
+   $$
+
+2. **Queueing Delay**
+
+   $$
+     t^{\rm queue}_j = \frac{1}{\mu - N_{\rm UE}\lambda_p}
+   $$
+
+   where $\lambda_p$ is per-UE packet rate and $\mu$ the gNB’s service rate ([5G Americas][2]).
+
+3. **Link Latency**
+
+   $$
+     t_{ij} = t^{\rm prop}_{ij} + t^{\rm queue}_j
+   $$
+
+4. **BER & Reliability**
+
+   $$
+     \mathrm{BER}_{ij} = Q\bigl(\sqrt{2\,/\,d_{ij}^2}\bigr), 
+     \quad R_{ij} = \bigl(1-\mathrm{BER}_{ij}\bigr)^L
+   \] :contentReference[oaicite:13]{index=13}
+
+   $$
+
+5. **Aggregate Metrics**
+   Best/Worst/Average extracted over all $t_{ij}$ and $R_{ij}$.
+
+---
+
+## Contributing
+
+We welcome contributions:
+
+1. Fork & clone the repo.
+2. Create a feature branch.
+3. Submit a pull request with clear descriptions and tests.
+
+Please adhere to our [Code of Conduct](./CODE_OF_CONDUCT.md) and [Contributing Guide](./CONTRIBUTING.md).
+
+---
+
+## License
+
+Released under the **MIT License**. See [LICENSE](./LICENSE) for details.
+
+---
+
+## References
+
+1. free5GC Compose—Docker-Compose for free5GC (Stage 3) ([free5gc.org][1])
+2. 5G Americas White Paper on URLLC targets (1 ms, 99.999%) ([5G Americas][3], [5G Americas][2])
+3. 3GPP TS 22.261: Service Requirements for the 5G System ([5G Americas][6])
+4. Coll-Perales et al., V2X URLLC transport delay models ([arXiv][11])
+5. BPSK BER Q-function in AWGN channels ([5G Americas][6])
+6. React-three-fiber: React renderer for Three.js ([GitHub][8])
+7. @react-three/drei helper library for Three-fiber ([Poimandres Documentation][9])
+8. Flask (Pallets Projects) for Python web APIs ([The Fast Mode][10])
+9. Jinja2 Templating Engine (Official docs) ([The Fast Mode][10])
+10. Docker Compose documentation (Docker Inc.) ([free5gc.org][1])
+11. UERANSIM integration notes (free5gc-compose) ([GitHub][5])
+12. MM1 Queueing theory for URLLC delays ([5G Americas][2])
+13. “On the Ultra-Reliable and Low-Latency Communications in Flexible TDD” (Esswie & Pedersen) ([arXiv][11])
+14. Keysight URLLC white paper (autonomous vehicles, V2X) ([Keysight][12])
+15. srsRAN & UERANSIM examples for RAN testing ([GitHub][5])
+
+[1]: https://free5gc.org/guide/0-compose/?utm_source=chatgpt.com "0 compose - free5GC"
+[2]: https://www.5gamericas.org/new-services-applications-with-5g-ultra-reliable-low-latency-communications/?utm_source=chatgpt.com "New Services & Applications with 5G Ultra-Reliable Low Latency ..."
+[3]: https://www.5gamericas.org/wp-content/uploads/2019/07/5G_Americas_URLLLC_White_Paper_Final__updateJW.pdf?utm_source=chatgpt.com "[PDF] Ultra-Reliable Low-Latency Communication - 5G Americas"
+[4]: https://docs.pmnd.rs/react-three-fiber?ref=trap.jp&utm_source=chatgpt.com "Introduction - React Three Fiber - Docs"
+[5]: https://github.com/free5gc/free5gc-compose?utm_source=chatgpt.com "free5GC compose - GitHub"
+[6]: https://www.5gamericas.org/white-papers/?utm_source=chatgpt.com "5G Americas white papers"
+[7]: https://github.com/calee0219/free5gc-docker-compose?utm_source=chatgpt.com "calee0219/free5gc-docker-compose - GitHub"
+[8]: https://github.com/pmndrs/react-three-fiber?utm_source=chatgpt.com "pmndrs/react-three-fiber: A React renderer for Three.js - GitHub"
+[9]: https://drei.docs.pmnd.rs/?utm_source=chatgpt.com "Drei: Introduction"
+[10]: https://www.thefastmode.com/telecom-white-papers/26949-white-paper-understanding-5g-time-critical-services?utm_source=chatgpt.com "[White paper] Understanding 5G & Time Critical Services"
+[11]: https://arxiv.org/abs/1909.11305?utm_source=chatgpt.com "On the Ultra-Reliable and Low-Latency Communications in Flexible TDD/FDD 5G Networks"
+[12]: https://www.keysight.com/us/en/assets/7120-1098/white-papers/URLLC-5Gs-Most-Intriguing-and-Challenging-Use-Case.pdf?utm_source=chatgpt.com "URLLC: 5G's Most Intriguing and Challenging Use Case - Keysight"
