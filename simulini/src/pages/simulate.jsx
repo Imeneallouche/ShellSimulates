@@ -335,20 +335,20 @@ export default function Simulate() {
             <div className="mt-8 p-2">
               <div className="flex space-x-4 text-sm">
                 <div>
-                  <div className="text-2xl font-semibold">
-                    {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
+                  <div className="text-xl font-semibold">
+                    {result ? (result.best_latency * 1e3).toFixed(3) : "-"}{" "}
                   </div>
                   <div className="text-blue-500 uppercase mt-2">best</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold">
-                    {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
+                  <div className="text-xl font-semibold">
+                    {result ? (result.worst_latency * 1e3).toFixed(3) : "-"}{" "}
                   </div>
                   <div className="text-blue-500 uppercase mt-2">worst</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-blue-400">
-                    {result ? (result.average_latency * 1e3).toFixed(2) : "-"}{" "}
+                  <div className="text-xl font-semibold text-blue-400">
+                    {result ? (result.average_latency * 1e3).toFixed(3) : "-"}{" "}
                   </div>
                   <div className="text-blue-500 uppercase mt-2">average</div>
                 </div>

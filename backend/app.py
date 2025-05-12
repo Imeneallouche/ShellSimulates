@@ -4,104 +4,231 @@ import tempfile
 import subprocess
 from flask import Flask, request, jsonify
 from jinja2 import Environment, FileSystemLoader
-from math import erf, sqrt
+import math
 from flask_cors import CORS
+import heapq
+from typing import List, Dict
+
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React
 
-# Constants for latency/reliability
-import math
-from typing import List, Dict
+
+# System parameters
+V_FIBER = 2e8  # m/s in fiber optics :contentReference[oaicite:3]{index=3}
+LAMBDA_P = 10  # pkt/s per UE
+MU_GNB = 1000  # pkt/s per gNB server
+PROCESS_GNB = 0.001  # fixed processing (s) at gNB before queue :contentReference[oaicite:4]{index=4}
+L_BITS = 32 * 8  # packet size in bits
+EPS = 1e-12  # to avoid log(0)
 
 
-def calculate_metrics(num_upfs, num_gnbs, ue_per_gnb, distances, links):
-    # Constants
-    SPEED = 2e8  # m/s (fiber optic)
-    BLER = 0.1
-    N_RETRANS = 3
-    T_INITIAL = 0.001  # 1 ms
-    T_RETRANS = 0.001  # 1 ms per retransmission
-    PROCESSING_DELAY_PER_UPF = 0.0005  # 0.5 ms
+# /*//////////////////////////////////////////////////////////////
+#                            COMPUTE LATENCY
+# //////////////////////////////////////////////////////////////*/
+def compute_latencies_to_pdn(
+    nbgNB: int,
+    nbUPF: int,
+    nbUE: int,
+    distances: List[List[str]],
+    links: List[List[str]],
+    pdnLinks: List[str],
+) -> List[float]:
+    """
+    Returns a list of length nbUE of expected latencies (s) for each UE → PDN message.
+    Assumes UEs are uniformly assigned to gNBs: UE count per gNB = floor(nbUE/nbgNB) + extras.
+    """
+    # 1) Determine UE distribution per gNB
+    base, extra = divmod(nbUE, nbgNB)
+    ues_per_gnb = [base + (1 if i < extra else 0) for i in range(nbgNB)]
 
-    # Radio latency (round trip)
-    radio_latency = 2 * (T_INITIAL + N_RETRANS * T_RETRANS)
+    # 2) Precompute gNB queue delays t_queue[j]
+    #    t_queue = PROCESS_GNB + 1/(MU_GNB - λ), where λ = N_UE_j * LAMBDA_P
+    t_queue = []
+    for j in range(nbgNB):
+        lam = ues_per_gnb[j] * LAMBDA_P
+        if MU_GNB <= lam:
+            raise ValueError(f"gNB {j} overloaded: λ={lam} ≥ μ={MU_GNB}")
+        t_queue.append(
+            PROCESS_GNB + 1.0 / (MU_GNB - lam)
+        )  # :contentReference[oaicite:5]{index=5}
 
-    # Radio reliability (round trip)
-    radio_reliability_one_way = 1 - (BLER ** (N_RETRANS + 1))
-    radio_reliability_round_trip = radio_reliability_one_way**2
+    # 3) Build UPF graph: nodes 0..nbUPF-1, plus PDN as node nbUPF
+    N = nbUPF + 1  # last index = PDN
+    adj = [[] for _ in range(N)]
 
-    # Initialize metrics
-    latency_worst, latency_best, latency_avg = [], [], []
-    reliabilities = []
-    total_ues = sum(ue_per_gnb)
+    # 3a) UPF ↔ UPF edges
+    for i in range(nbUPF):
+        for j in range(nbUPF):
+            dij = links[i][j]
+            if dij != "" and not math.isnan(float(dij)):
+                d = float(dij)
+                w = d / V_FIBER  # propagation :contentReference[oaicite:6]{index=6}
+                adj[i].append((j, w))
 
-    for gnb_id in range(num_gnbs):
-        num_ues = ue_per_gnb[gnb_id]
-        if num_ues == 0:
-            continue
+    # 3b) UPF → PDN edges
+    PDN = nbUPF
+    for i in range(nbUPF):
+        dstr = pdnLinks[i]
+        if dstr != "" and not math.isnan(float(dstr)):
+            d = float(dstr)
+            w = d / V_FIBER
+            adj[i].append((PDN, w))
 
-        # Extract connected UPFs and distances for this gNB
-        connected_upfs = [
-            upf_id
-            for upf_id in range(num_upfs)
-            if distances[gnb_id][upf_id] is not None
-        ]
-        if not connected_upfs:
-            # No UPF connected: latency = infinity, reliability = 0
-            latency_worst.extend([float("inf")] * num_ues)
-            latency_best.extend([float("inf")] * num_ues)
-            latency_avg.extend([float("inf")] * num_ues)
-            reliabilities.extend([0.0] * num_ues)
-            continue
+    # 4) Dijkstra: compute shortest UPF→PDN delays
+    def dijkstra(source: int) -> List[float]:
+        dist = [math.inf] * N
+        dist[source] = 0.0
+        heap = [(0.0, source)]
+        while heap:
+            cd, u = heapq.heappop(heap)
+            if cd > dist[u]:
+                continue
+            for v, w in adj[u]:
+                nd = cd + w
+                if nd < dist[v]:
+                    dist[v] = nd
+                    heapq.heappush(heap, (nd, v))
+        return dist
 
-        # Calculate latencies for each UPF path
-        upf_latencies = []
-        for upf_id in connected_upfs:
-            distance = distances[gnb_id][upf_id]
-            transport_latency = 2 * (distance / SPEED)  # Round trip
-            core_latency = PROCESSING_DELAY_PER_UPF
-            total_latency = radio_latency + transport_latency + core_latency
-            upf_latencies.append(total_latency)
+    # 5) Precompute for every UPF the minimal UPF→PDN propagation delay
+    upf_to_pdn_delay = [
+        dijkstra(i)[PDN] for i in range(nbUPF)
+    ]  # :contentReference[oaicite:7]{index=7}
 
-        # Latency metrics for this gNB
-        gnb_worst = max(upf_latencies)
-        gnb_best = min(upf_latencies)
-        gnb_avg = sum(upf_latencies) / len(upf_latencies)
+    # 6) For each UE on gNB j, find best path via any linked UPF i
+    ue_latencies = []
+    for j in range(nbgNB):
+        # find all UPFs linked to gNB j
+        for _ in range(ues_per_gnb[j]):
+            best = math.inf
+            for i in range(nbUPF):
+                dstr = distances[j][i]
+                if dstr != "" and not math.isnan(float(dstr)):
+                    d = float(dstr)
+                    t_prop = d / V_FIBER  # :contentReference[oaicite:8]{index=8}
+                    total = t_queue[j] + t_prop + upf_to_pdn_delay[i]
+                    if total < best:
+                        best = total
+            if best == math.inf:
+                # no path to PDN
+                ue_latencies.append(math.inf)
+            else:
+                ue_latencies.append(best)
+    return ue_latencies
 
-        latency_worst.extend([gnb_worst] * num_ues)
-        latency_best.extend([gnb_best] * num_ues)
-        latency_avg.extend([gnb_avg] * num_ues)
 
-        # Reliability for this gNB
-        num_upfs_connected = len(connected_upfs)
-        reliability = 1 - (1 - radio_reliability_round_trip) ** num_upfs_connected
-        reliabilities.extend([reliability] * num_ues)
+# /*//////////////////////////////////////////////////////////////
+#                      COMPUTE RELIABILITY
+# //////////////////////////////////////////////////////////////*/
+def qfunc(x: float) -> float:
+    """Tail probability of standard normal distribution."""
+    return 0.5 * math.erfc(x / math.sqrt(2))
 
-    # Aggregate results
-    def get_stats(values):
-        valid = [v for v in values if v != float("inf")]
+
+def link_reliability(d_str: str) -> float:
+    """
+    Compute R_link for a link distance given as string.
+    Returns 0.0 if d_str is empty or invalid.
+    """
+    try:
+        d = float(d_str)
+    except (ValueError, TypeError):
+        return 0.0
+    # Approximate SNR ∝ 1/d^2 (normalized) :contentReference[oaicite:6]{index=6}
+    snr = 1.0 / (d**2 + EPS)
+    ber = qfunc(math.sqrt(2 * snr))  # :contentReference[oaicite:7]{index=7}
+    return (1.0 - ber) ** L_BITS  # :contentReference[oaicite:8]{index=8}
+
+
+def compute_reliabilities_to_pdn(
+    nbgNB: int,
+    nbUPF: int,
+    nbUE: int,
+    distances: List[List[str]],
+    links: List[List[str]],
+    pdnLinks: List[str],
+) -> Dict[str, List[float]]:
+    """
+    Returns dict with:
+      - 'per_ue': list of best-path reliabilities for each UE
+      - 'best':  max over per_ue
+      - 'worst': min over per_ue
+      - 'average': avg over per_ue
+    """
+    # 1) Uniform UE distribution to gNBs
+    base, extra = divmod(nbUE, nbgNB)
+    ues_per_gnb = [base + (1 if i < extra else 0) for i in range(nbgNB)]
+
+    # 2) Build graph of UPFs (0..nbUPF-1) plus PDN node at index nbUPF
+    N = nbUPF + 1
+    PDN = nbUPF
+    adj = [[] for _ in range(N)]
+
+    # 2a) gNB→UPF edges: handled per-UE below
+
+    # 2b) UPF↔UPF edges
+    for i in range(nbUPF):
+        for j in range(nbUPF):
+            if links[i][j] != "":
+                r = link_reliability(links[i][j])
+                if r > 0:
+                    w = -math.log(r + EPS)
+                    adj[i].append((j, w))
+
+    # 2c) UPF→PDN edges
+    for i in range(nbUPF):
+        if pdnLinks[i] != "":
+            r = link_reliability(pdnLinks[i])
+            if r > 0:
+                w = -math.log(r + EPS)
+                adj[i].append((PDN, w))
+
+    # 3) Dijkstra for reliability: shortest path from each UPF to PDN
+    def dijkstra(source: int) -> List[float]:
+        dist = [math.inf] * N
+        dist[source] = 0.0
+        heap = [(0.0, source)]
+        while heap:
+            cd, u = heapq.heappop(heap)
+            if cd > dist[u]:
+                continue
+            for v, w in adj[u]:
+                nd = cd + w
+                if nd < dist[v]:
+                    dist[v] = nd
+                    heapq.heappush(heap, (nd, v))
+        return dist
+
+    upf_to_pdn = [dijkstra(i)[PDN] for i in range(nbUPF)]
+
+    # 4) For each UE: find its gNB j, then the best (max-R) UPF path
+    per_ue = []
+    for j in range(nbgNB):
+        for _ in range(ues_per_gnb[j]):
+            best_rel = 0.0
+            for i in range(nbUPF):
+                if distances[j][i] != "":
+                    # gNB→UPF reliability
+                    r1 = link_reliability(distances[j][i])
+                    # UPF→PDN reliability via best path
+                    if upf_to_pdn[i] < math.inf:
+                        r2 = math.exp(-upf_to_pdn[i])
+                        # end-to-end reliability
+                        rel = r1 * r2
+                        best_rel = max(best_rel, rel)
+            per_ue.append(best_rel)
+
+    # 5) Aggregate
+    if per_ue:
         return {
-            "worst": max(valid) if valid else 0,
-            "best": min(valid) if valid else 0,
-            "average": sum(valid) / len(valid) if valid else 0,
+            "per_ue": per_ue,
+            "best": max(per_ue),
+            "worst": min(per_ue),
+            "average": sum(per_ue) / len(per_ue),
         }
-
-    latency_stats = get_stats(latency_avg)  # Use avg for overall topology
-    reliability_stats = {
-        "worst": min(reliabilities),
-        "best": max(reliabilities),
-        "average": sum(reliabilities) / len(reliabilities) if reliabilities else 0,
-    }
-
-    return {
-        "best_latency": latency_stats["best"],
-        "worst_latency": latency_stats["worst"],
-        "average_latency": latency_stats["average"],
-        "best_reliability": reliability_stats["best"],
-        "worst_reliability": reliability_stats["worst"],
-        "average_reliability": reliability_stats["average"],
-    }
+    else:
+        return {"per_ue": [], "best": 0.0, "worst": 0.0, "average": 0.0}
 
 
 def render_and_deploy(nbUPF, nbgNB, nbUE, distances, links):
@@ -148,6 +275,7 @@ def topology():
     nbgNB = data.get("nbgNB")
     distances = data.get("distances", [])  # matrix gNB x UPF
     links = data.get("links", [])  # matrix UPF x UPF
+    pdnLinks = data.get("pdnLinks", [])
 
     # 1) Deploy free5gc-compose
     # try:
@@ -157,12 +285,32 @@ def topology():
 
     # 2) Compute detailed metrics
     # If UEs are uniformly divided, build a list per gNB
-    per = [nbUE // nbgNB + (1 if i < (nbUE % nbgNB) else 0) for i in range(nbgNB)]
-    distances = [
-        [float(value) if value.strip() else None for value in row] for row in distances
-    ]
-    metrics = calculate_metrics(nbUPF, nbgNB, per, distances, links)
+    # per = [nbUE // nbgNB + (1 if i < (nbUE % nbgNB) else 0) for i in range(nbgNB)]
+    # distances = [
+    #    [float(value) if value.strip() else None for value in row] for row in distances
+    # ]
 
+    latency_metrics = compute_latencies_to_pdn(
+        nbgNB, nbUPF, nbUE, distances, links, pdnLinks
+    )
+
+    reliability_metrics = compute_reliabilities_to_pdn(
+        nbgNB, nbUPF, nbUE, distances, links, pdnLinks
+    )
+
+    metrics = {
+        "worst_latency": max(latency_metrics),
+        "best_latency": min(latency_metrics),
+        "average_latency": (
+            sum(latency_metrics) / len(latency_metrics) if latency_metrics else 0
+        ),
+        "worst_reliability": max(latency_metrics),
+        "best_reliability": min(latency_metrics),
+        "average_reliability": (
+            sum(latency_metrics) / len(latency_metrics) if latency_metrics else 0
+        ),
+    }
+    print(reliability_metrics)
     # 3) Return
     return jsonify({**metrics})
 
