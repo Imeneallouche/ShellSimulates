@@ -97,7 +97,7 @@ export default function Simulate() {
           ["", "", "2000"],
           ["", "", ""],
         ]);
-        setPdnLinks(["", "", "", "", "2000"]);
+        setPdnLinks(["", "", "2000"]);
       } else if (preset === "complex") {
         setNbUPF(5);
         setNbgNB(3);
