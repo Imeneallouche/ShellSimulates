@@ -377,7 +377,8 @@ export default function Simulate() {
                           (parseInt(distances[0][0]) +
                             parseInt(distances[1][0]) +
                             parseInt(distances[2][0])) -
-                        0.0001 * parseInt(pdnLinks[nbUPF - 1])
+                        0.0001 * parseInt(pdnLinks[nbUPF - 1]) -
+                        0.0001 * parseInt(links[0][nbUPF - 1])
                       ).toFixed(3)
                     : "-"}
                 </div>
