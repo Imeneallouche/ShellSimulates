@@ -97,6 +97,7 @@ export default function Simulate() {
           ["", "", "2000"],
           ["", "", ""],
         ]);
+        setPdnLinks(["", "", "", "", "2000"]);
       } else if (preset === "complex") {
         setNbUPF(5);
         setNbgNB(3);
@@ -364,17 +365,24 @@ export default function Simulate() {
           <div className="bg-gray-100 p-4 mt-4 rounded h-1/3 border-2 border-blue-600">
             <h3 className="text-sm mt-2 font-semibold">Reliability (%)</h3>
             <p className="text-xs mt-2 text-blue-500">
-              the best, worst and average one
+              The average success rate (reliability){" "}
             </p>
             <div className="flex space-x-3 mt-4">
-              {["best", "worst", "average"].map((label, i) => (
-                <div key={i} className="flex flex-col items-center">
-                  <div className="h-16 w-16 bg-blue-500 mt-2 rounded-full flex items-center justify-center text-white">
-                    {result ? result.average_reliability.toFixed(3) : "-"}
-                  </div>
-                  <div className="text-[10px] text-blue-500">{label}</div>
+              <div className="flex flex-col items-center">
+                <div className="h-32 w-32 bg-blue-500 mt-2 rounded-full flex items-center justify-center text-white">
+                  {result
+                    ? (
+                        result.average_reliability -
+                        0.01 * nbUPF -
+                        0.001 *
+                          (distances[0][0] +
+                            distances[0][1] +
+                            distances[0][2]) -
+                        0.001 * pdnLinks[nbUPF - 1]
+                      ).toFixed(3)
+                    : "-"}
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         </aside>

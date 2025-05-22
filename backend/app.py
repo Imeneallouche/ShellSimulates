@@ -160,7 +160,7 @@ def link_reliability(d_str: str) -> float:
     pl = fspl_lin(d)
     ptx_w = 10 ** ((PTX_DBM - 30) / 10)
     snr = (ptx_w * db_to_lin(GT_DB) * db_to_lin(GR_DB) / pl) / noise_power()
-    ber = math.erfc(math.sqrt(2 * snr))  # :contentReference[oaicite:1]{index=1}
+    ber = 0.5 * math.erfc(math.sqrt(2 * snr))  # :contentReference[oaicite:1]{index=1}
     return (1 - ber) ** L_BITS  # :contentReference[oaicite:2]{index=2}
 
 
