@@ -18,9 +18,18 @@ CORS(app)  # Enable CORS for React
 V_FIBER = 2e8  # m/s in fiber optics :contentReference[oaicite:3]{index=3}
 LAMBDA_P = 10  # pkt/s per UE
 MU_GNB = 1000  # pkt/s per gNB server
-PROCESS_GNB = 0.001  # fixed processing (s) at gNB before queue :contentReference[oaicite:4]{index=4}
+PROCESS_GNB = 0.0001  # fixed processing (s) at gNB before queue :contentReference[oaicite:4]{index=4}
 L_BITS = 32 * 8  # packet size in bits
 EPS = 1e-12  # to avoid log(0)
+
+FREQ_MHZ = 3500  # Carrier freq (MHz)
+BANDWIDTH = 100e6  # Hz
+NOISE_FIG = 9  # dB
+PTX_DBM = 23  # dBm
+GT_DB = 8  # dBi
+GR_DB = 8  # dBi
+KB = 1.38064852e-23  # Boltzmann constant
+TEMP = 290  # Kelvin
 
 
 # /*//////////////////////////////////////////////////////////////
@@ -121,74 +130,85 @@ def compute_latencies_to_pdn(
 # /*//////////////////////////////////////////////////////////////
 #                      COMPUTE RELIABILITY
 # //////////////////////////////////////////////////////////////*/
-def qfunc(x: float) -> float:
-    """Tail probability of standard normal distribution."""
-    return 0.5 * math.erfc(x / math.sqrt(2))
+
+
+def db_to_lin(db: float) -> float:
+    return 10 ** (db / 10)
+
+
+def fspl_lin(d_m: float) -> float:
+    """Linear FSPL from d (m) at FREQ_MHZ."""
+    d_km = d_m / 1000.0
+    fspl_db = (
+        20 * math.log10(d_km) + 20 * math.log10(FREQ_MHZ) + 32.44
+    )  # :contentReference[oaicite:0]{index=0}
+    return db_to_lin(fspl_db)
+
+
+def noise_power() -> float:
+    """Thermal noise (W) over BANDWIDTH with NOISE_FIG."""
+    noise_w = KB * TEMP * BANDWIDTH
+    return noise_w * db_to_lin(NOISE_FIG)
 
 
 def link_reliability(d_str: str) -> float:
-    """
-    Compute R_link for a link distance given as string.
-    Returns 0.0 if d_str is empty or invalid.
-    """
+    """Returns per-link reliability (0–1) for distance string d_str."""
     try:
         d = float(d_str)
-    except (ValueError, TypeError):
+    except:
         return 0.0
-    # Approximate SNR ∝ 1/d^2 (normalized) :contentReference[oaicite:6]{index=6}
-    snr = 1.0 / (d**2 + EPS)
-    ber = qfunc(math.sqrt(2 * snr))  # :contentReference[oaicite:7]{index=7}
-    return (1.0 - ber) ** L_BITS  # :contentReference[oaicite:8]{index=8}
+    pl = fspl_lin(d)
+    ptx_w = 10 ** ((PTX_DBM - 30) / 10)
+    snr = (ptx_w * db_to_lin(GT_DB) * db_to_lin(GR_DB) / pl) / noise_power()
+    ber = math.erfc(math.sqrt(2 * snr))  # :contentReference[oaicite:1]{index=1}
+    return (1 - ber) ** L_BITS  # :contentReference[oaicite:2]{index=2}
 
 
-def compute_reliabilities_to_pdn(
-    nbgNB: int,
-    nbUPF: int,
-    nbUE: int,
+def compute_urlcc_reliability(
+    N_upf: int,
+    N_gnb: int,
+    N_ue: int,
     distances: List[List[str]],
     links: List[List[str]],
     pdnLinks: List[str],
-) -> Dict[str, List[float]]:
+) -> Dict[str, float]:
     """
-    Returns dict with:
-      - 'per_ue': list of best-path reliabilities for each UE
-      - 'best':  max over per_ue
-      - 'worst': min over per_ue
-      - 'average': avg over per_ue
+    Returns {'worst':%, 'best':%, 'average':%} reliability across all UEs,
+    accounting for UPF backup diversity.
     """
-    # 1) Uniform UE distribution to gNBs
-    base, extra = divmod(nbUE, nbgNB)
-    ues_per_gnb = [base + (1 if i < extra else 0) for i in range(nbgNB)]
+    # 1) Uniform UE distribution
+    base, extra = divmod(N_ue, N_gnb)
+    ues_per_gnb = [base + (1 if i < extra else 0) for i in range(N_gnb)]
 
-    # 2) Build graph of UPFs (0..nbUPF-1) plus PDN node at index nbUPF
-    N = nbUPF + 1
-    PDN = nbUPF
+    # 2) Build log-space graph for UPF->PDN
+    PDN = N_upf
+    N = N_upf + 1
     adj = [[] for _ in range(N)]
 
-    # 2a) gNB→UPF edges: handled per-UE below
-
-    # 2b) UPF↔UPF edges
-    for i in range(nbUPF):
-        for j in range(nbUPF):
-            if links[i][j] != "":
-                r = link_reliability(links[i][j])
-                if r > 0:
-                    w = -math.log(r + EPS)
+    # 2a) UPF↔UPF (triangular matrix)
+    for i in range(N_upf):
+        for j in range(i + 1, N_upf):
+            dstr = links[i][j]
+            if dstr:
+                r = link_reliability(dstr)
+                if r > EPS:
+                    w = -math.log(r)
                     adj[i].append((j, w))
+                    adj[j].append((i, w))
 
-    # 2c) UPF→PDN edges
-    for i in range(nbUPF):
-        if pdnLinks[i] != "":
-            r = link_reliability(pdnLinks[i])
-            if r > 0:
-                w = -math.log(r + EPS)
-                adj[i].append((PDN, w))
+    # 2b) UPF→PDN
+    for i in range(N_upf):
+        dstr = pdnLinks[i] if i < len(pdnLinks) else ""
+        if dstr:
+            r = link_reliability(dstr)
+            if r > EPS:
+                adj[i].append((PDN, -math.log(r)))
 
-    # 3) Dijkstra for reliability: shortest path from each UPF to PDN
-    def dijkstra(source: int) -> List[float]:
+    # 3) Dijkstra on log-space
+    def dijkstra(src: int) -> List[float]:
         dist = [math.inf] * N
-        dist[source] = 0.0
-        heap = [(0.0, source)]
+        dist[src] = 0.0
+        heap = [(0.0, src)]
         while heap:
             cd, u = heapq.heappop(heap)
             if cd > dist[u]:
@@ -200,35 +220,38 @@ def compute_reliabilities_to_pdn(
                     heapq.heappush(heap, (nd, v))
         return dist
 
-    upf_to_pdn = [dijkstra(i)[PDN] for i in range(nbUPF)]
+    upf2pdn = [dijkstra(i)[PDN] for i in range(N_upf)]
 
-    # 4) For each UE: find its gNB j, then the best (max-R) UPF path
+    # 4) Per-UE: combine all UPF paths in parallel
     per_ue = []
-    for j in range(nbgNB):
+    for j in range(N_gnb):
         for _ in range(ues_per_gnb[j]):
-            best_rel = 0.0
-            for i in range(nbUPF):
-                if distances[j][i] != "":
-                    # gNB→UPF reliability
-                    r1 = link_reliability(distances[j][i])
-                    # UPF→PDN reliability via best path
-                    if upf_to_pdn[i] < math.inf:
-                        r2 = math.exp(-upf_to_pdn[i])
-                        # end-to-end reliability
-                        rel = r1 * r2
-                        best_rel = max(best_rel, rel)
-            per_ue.append(best_rel)
+            path_rels = []
+            for i in range(N_upf):
+                dstr = distances[j][i]
+                if dstr:
+                    r1 = link_reliability(dstr)  # gNB→UPF
+                    if upf2pdn[i] < math.inf:
+                        r2 = math.exp(-upf2pdn[i])  # UPF→PDN
+                        path_rels.append(r1 * r2)
+            # combine in parallel: 1 - ∏(1 - R_i)
+            if path_rels:
+                prod_fail = 1.0
+                for r in path_rels:
+                    prod_fail *= 1 - r
+                overall = 1 - prod_fail
+            else:
+                overall = 0.0
+            per_ue.append(overall * 100)  # to percent
 
-    # 5) Aggregate
-    if per_ue:
-        return {
-            "per_ue": per_ue,
-            "best": max(per_ue),
-            "worst": min(per_ue),
-            "average": sum(per_ue) / len(per_ue),
-        }
-    else:
-        return {"per_ue": [], "best": 0.0, "worst": 0.0, "average": 0.0}
+    if not per_ue:
+        return {"worst": 0.0, "best": 0.0, "average": 0.0}
+
+    return {
+        "worst": min(per_ue),
+        "best": max(per_ue),
+        "average": sum(per_ue) / len(per_ue),
+    }
 
 
 def render_and_deploy(nbUPF, nbgNB, nbUE, distances, links):
@@ -294,8 +317,8 @@ def topology():
         nbgNB, nbUPF, nbUE, distances, links, pdnLinks
     )
 
-    reliability_metrics = compute_reliabilities_to_pdn(
-        nbgNB, nbUPF, nbUE, distances, links, pdnLinks
+    reliability_metrics = compute_urlcc_reliability(
+        nbUPF, nbgNB, nbUE, distances, links, pdnLinks
     )
 
     metrics = {
@@ -304,15 +327,12 @@ def topology():
         "average_latency": (
             sum(latency_metrics) / len(latency_metrics) if latency_metrics else 0
         ),
-        "worst_reliability": max(latency_metrics),
-        "best_reliability": min(latency_metrics),
-        "average_reliability": (
-            sum(latency_metrics) / len(latency_metrics) if latency_metrics else 0
-        ),
+        "best_reliability": reliability_metrics["best"],
+        "worst_reliability": reliability_metrics["worst"],
+        "average_reliability": reliability_metrics["average"],
     }
-    print(reliability_metrics)
     # 3) Return
-    return jsonify({**metrics})
+    return jsonify(metrics)
 
 
 if __name__ == "__main__":

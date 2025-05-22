@@ -84,31 +84,36 @@ export default function Simulate() {
         setDistances([["10"]]); // gNB0 → UPF0
         setLinks([[false]]);
       } else if (preset === "medium") {
-        setNbUPF(2);
-        setNbgNB(2);
-        setNbUE(5);
-        setDistances([
-          ["10", ""], // gNB0 → UPF0
-          ["5", "5"], // gNB1 → UPF0 & UPF1
-        ]);
-        setLinks([
-          ["", ""],
-          ["", ""],
-        ]);
-      } else if (preset === "complex") {
         setNbUPF(3);
         setNbgNB(3);
-        setNbUE(7);
+        setNbUE(9);
         setDistances([
-          ["10", "5", ""], // gNB0 → UPF0 & UPF1
-          ["10", "10", "10"], // gNB1 → all UPFs
-          ["", "5", "10"], // gNB2 → UPF1 & UPF2
+          ["2000", "", ""], // gNB0 → UPF0
+          ["2000", "", ""], // gNB1 → UPF0 & UPF1
+          ["2000", "", ""],
         ]);
         setLinks([
-          ["", "10", ""],
-          ["10", "", "10"],
-          ["", "10", ""],
+          ["", "2000", "2000"],
+          ["", "", "2000"],
+          ["", "", ""],
         ]);
+      } else if (preset === "complex") {
+        setNbUPF(5);
+        setNbgNB(3);
+        setNbUE(9);
+        setDistances([
+          ["2000", "", "", "", ""], // gNB0 → UPF0 & UPF1
+          ["2000", "", "", "", ""], // gNB1 → all UPFs
+          ["2000", "", "", "", ""], // gNB2 → UPF1 & UPF2
+        ]);
+        setLinks([
+          ["", "2000", "", "", "20000"],
+          ["", "", "2000", "", ""],
+          ["", "", "", "2000", ""],
+          ["", "", "", "", "2000"],
+          ["", "", "", "", ""],
+        ]);
+        setPdnLinks(["", "", "", "", "2000"]);
       }
     }
   }, [location.state]);
@@ -365,9 +370,7 @@ export default function Simulate() {
               {["best", "worst", "average"].map((label, i) => (
                 <div key={i} className="flex flex-col items-center">
                   <div className="h-16 w-16 bg-blue-500 mt-2 rounded-full flex items-center justify-center text-white">
-                    {result
-                      ? (result.average_reliability * 1e3).toFixed(2)
-                      : "-"}
+                    {result ? result.average_reliability.toFixed(3) : "-"}
                   </div>
                   <div className="text-[10px] text-blue-500">{label}</div>
                 </div>

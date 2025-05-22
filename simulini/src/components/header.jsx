@@ -15,8 +15,8 @@ export default function Header() {
         <div className="w-1/2 text-xl flex flex-col justify-center items-start px-16">
           <div className="mb-8">
             <h1 className="text-6xl font-extrabold leading-tight">
-              <span className="block text-blue-500">5G core</span>
-              <span className="block text-blue-500">Simulator</span>
+              <span className="block text-blue-500">Shell</span>
+              <span className="block text-blue-500">Simulates</span>
             </h1>
           </div>
           <h2>

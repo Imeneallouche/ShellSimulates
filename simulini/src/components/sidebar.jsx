@@ -21,7 +21,7 @@ export default function SideBar() {
     <header className="w-full flex items-center justify-between px-10 py-8 bg-gradient-to-r from-blue-100 to-blue-200 shadow-md">
       <div className="flex items-center space-x-3">
         <div className="text-3xl font-extrabold text-blue-600 tracking-tight animate-pulse">
-          5G Core Simulator
+          ShellSimulates
         </div>
       </div>
 
